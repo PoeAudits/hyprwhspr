@@ -13,7 +13,7 @@ import atexit
 from pathlib import Path
 
 # Add the src directory to the Python path
-src_path = Path(__file__).parent / 'src'
+src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
 
 # Lock file for preventing multiple instances
@@ -26,6 +26,8 @@ from whisper_manager import WhisperManager
 from text_injector import TextInjector
 from global_shortcuts import GlobalShortcuts
 from audio_manager import AudioManager
+from media_controller import MediaController
+
 
 class hyprwhsprApp:
     """Main application class for hyprwhspr voice dictation (Headless Mode)"""
@@ -35,7 +37,7 @@ class hyprwhsprApp:
         self.config = ConfigManager()
 
         # Initialize audio capture with configured device
-        audio_device_id = self.config.get_setting('audio_device', None)
+        audio_device_id = self.config.get_setting("audio_device", None)
         self.audio_capture = AudioCapture(device_id=audio_device_id)
 
         # Initialize audio feedback manager
@@ -43,6 +45,7 @@ class hyprwhsprApp:
 
         self.whisper_manager = WhisperManager()
         self.text_injector = TextInjector(self.config)
+        self.media_controller = MediaController(self.config)
         self.global_shortcuts = None
 
         # Application state
@@ -110,19 +113,23 @@ class hyprwhsprApp:
 
         try:
             self.is_recording = True
-            
+
             # Write recording status to file for tray script
             self._write_recording_status(True)
-            
+
             # Play start sound
             self.audio_manager.play_start_sound()
-            
+
             # Start audio capture
             self.audio_capture.start_recording()
-            
+
+            # Pause active media players if feature enabled
+            if self.media_controller.is_enabled():
+                self.media_controller.pause_active_players()
+
             # Start audio level monitoring thread
             self._start_audio_level_monitoring()
-            
+
         except Exception as e:
             print(f"[ERROR] Failed to start recording: {e}")
             self.is_recording = False
@@ -135,24 +142,24 @@ class hyprwhsprApp:
 
         try:
             self.is_recording = False
-            
+
             # Stop audio level monitoring
             self._stop_audio_level_monitoring()
-            
+
             # Write recording status to file for tray script
             self._write_recording_status(False)
-            
+
             # Stop audio capture
             audio_data = self.audio_capture.stop_recording()
-            
+
             # Play stop sound
             self.audio_manager.play_stop_sound()
-            
+
             if audio_data is not None:
                 self._process_audio(audio_data)
             else:
                 print("[WARN] No audio data captured")
-                
+
         except Exception as e:
             print(f"[ERROR] Error stopping recording: {e}")
 
@@ -163,18 +170,26 @@ class hyprwhsprApp:
 
         try:
             self.is_processing = True
-            
+
             # Transcribe audio
             transcription = self.whisper_manager.transcribe_audio(audio_data)
-            
+
             if transcription and transcription.strip():
                 self.current_transcription = transcription.strip()
-                
+
                 # Inject text
                 self._inject_text(self.current_transcription)
+
+                # Resume previously-playing media players
+                if self.media_controller.is_enabled():
+                    self.media_controller.resume_paused_players()
             else:
                 print("[WARN] No transcription generated")
-                
+
+                # Resume media players even if no transcription (dictation was cancelled/empty)
+                if self.media_controller.is_enabled():
+                    self.media_controller.resume_paused_players()
+
         except Exception as e:
             print(f"[ERROR] Error processing audio: {e}")
         finally:
@@ -190,12 +205,12 @@ class hyprwhsprApp:
     def _write_recording_status(self, is_recording):
         """Write recording status to file for tray script"""
         try:
-            status_file = Path.home() / '.config' / 'hyprwhspr' / 'recording_status'
+            status_file = Path.home() / ".config" / "hyprwhspr" / "recording_status"
             status_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             if is_recording:
-                with open(status_file, 'w') as f:
-                    f.write('true')
+                with open(status_file, "w") as f:
+                    f.write("true")
             else:
                 # Remove the file when not recording to avoid stale state
                 if status_file.exists():
@@ -207,29 +222,31 @@ class hyprwhsprApp:
         """Start monitoring and writing audio levels to file"""
         if self.audio_level_thread and self.audio_level_thread.is_alive():
             return
-        
+
         def monitor_audio_level():
-            level_file = Path.home() / '.config' / 'hyprwhspr' / 'audio_level'
+            level_file = Path.home() / ".config" / "hyprwhspr" / "audio_level"
             level_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             while self.is_recording:
                 try:
                     level = self.audio_capture.get_audio_level()
-                    with open(level_file, 'w') as f:
-                        f.write(f'{level:.3f}')
+                    with open(level_file, "w") as f:
+                        f.write(f"{level:.3f}")
                 except Exception as e:
                     # Silently fail - don't spam errors
                     pass
                 time.sleep(0.1)  # Update 10 times per second
-            
+
             # Clean up file when not recording
             try:
                 if level_file.exists():
                     level_file.unlink()
             except:
                 pass
-        
-        self.audio_level_thread = threading.Thread(target=monitor_audio_level, daemon=True)
+
+        self.audio_level_thread = threading.Thread(
+            target=monitor_audio_level, daemon=True
+        )
         self.audio_level_thread.start()
 
     def _stop_audio_level_monitoring(self):
@@ -249,7 +266,7 @@ class hyprwhsprApp:
         if not self.whisper_manager.initialize():
             print("[ERROR] Failed to initialize Whisper.")
             return False
-        
+
         # Start global shortcuts
         if self.global_shortcuts:
             if not self.global_shortcuts.start():
@@ -259,9 +276,9 @@ class hyprwhsprApp:
         else:
             print("[ERROR] Global shortcuts not initialized!")
             return False
-        
+
         print("\n[READY] hyprwhspr ready - press shortcut to start dictation")
-        
+
         try:
             # Keep the application running
             while True:
@@ -273,7 +290,7 @@ class hyprwhsprApp:
             print(f"[ERROR] Error in main loop: {e}")
             self._cleanup()
             return False
-        
+
         return True
 
     def _cleanup(self):
@@ -289,9 +306,9 @@ class hyprwhsprApp:
 
             # Save configuration
             self.config.save_config()
-            
+
             print("[CLEANUP] Cleanup completed")
-            
+
         except Exception as e:
             print(f"[WARN] Error during cleanup: {e}")
         finally:
@@ -305,59 +322,59 @@ def _acquire_lock_file():
     Returns (success: bool, message: str or None)
     """
     global _lock_file, _lock_file_path
-    
+
     # Check if we're running under systemd
     # If we are, systemd already manages single instances - skip the lock file
     running_under_systemd = False
     try:
         ppid = os.getppid()
         try:
-            with open(f'/proc/{ppid}/comm', 'r', encoding='utf-8') as f:
+            with open(f"/proc/{ppid}/comm", "r", encoding="utf-8") as f:
                 parent_comm = f.read().strip()
-                if 'systemd' in parent_comm:
+                if "systemd" in parent_comm:
                     running_under_systemd = True
         except (FileNotFoundError, IOError):
             pass
-        
-        if os.environ.get('INVOCATION_ID') or os.environ.get('JOURNAL_STREAM'):
+
+        if os.environ.get("INVOCATION_ID") or os.environ.get("JOURNAL_STREAM"):
             running_under_systemd = True
     except Exception:
         pass
-    
+
     if running_under_systemd:
         # Trust systemd to manage single instances
         return True, None
-    
+
     # Set up lock file path
-    config_dir = Path.home() / '.config' / 'hyprwhspr'
+    config_dir = Path.home() / ".config" / "hyprwhspr"
     config_dir.mkdir(parents=True, exist_ok=True)
-    _lock_file_path = config_dir / 'hyprwhspr.lock'
-    
+    _lock_file_path = config_dir / "hyprwhspr.lock"
+
     try:
         # Try to open/create the lock file
-        _lock_file = open(_lock_file_path, 'w')
-        
+        _lock_file = open(_lock_file_path, "w")
+
         # Try to acquire an exclusive non-blocking lock
         try:
             fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            
+
             # Lock acquired successfully - write our PID
             _lock_file.write(str(os.getpid()))
             _lock_file.flush()
-            
+
             # Register cleanup handler
             atexit.register(_release_lock_file)
-            
+
             return True, None
-            
+
         except (IOError, OSError):
             # Lock is held by another process
             _lock_file.close()
             _lock_file = None
-            
+
             # Check if the PID in the lock file is still valid
             try:
-                with open(_lock_file_path, 'r') as f:
+                with open(_lock_file_path, "r") as f:
                     lock_pid_str = f.read().strip()
                     if lock_pid_str:
                         try:
@@ -371,8 +388,10 @@ def _acquire_lock_file():
                             try:
                                 _lock_file_path.unlink()
                                 # Retry acquiring lock
-                                _lock_file = open(_lock_file_path, 'w')
-                                fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                                _lock_file = open(_lock_file_path, "w")
+                                fcntl.flock(
+                                    _lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB
+                                )
                                 _lock_file.write(str(os.getpid()))
                                 _lock_file.flush()
                                 atexit.register(_release_lock_file)
@@ -386,7 +405,7 @@ def _acquire_lock_file():
             except (FileNotFoundError, IOError):
                 # Can't read lock file - assume another instance is running
                 return False, "lock file"
-                
+
     except (IOError, OSError, PermissionError) as e:
         # Can't create or access lock file
         if _lock_file:
@@ -398,7 +417,7 @@ def _acquire_lock_file():
 def _release_lock_file():
     """Release the lock file"""
     global _lock_file, _lock_file_path
-    
+
     if _lock_file:
         try:
             fcntl.flock(_lock_file.fileno(), fcntl.LOCK_UN)
@@ -406,7 +425,7 @@ def _release_lock_file():
         except Exception:
             pass
         _lock_file = None
-    
+
     if _lock_file_path and _lock_file_path.exists():
         try:
             _lock_file_path.unlink()
@@ -418,6 +437,7 @@ def _is_hyprwhspr_running():
     """Check if hyprwhspr is already running"""
     try:
         from instance_detection import is_hyprwhspr_running
+
         return is_hyprwhspr_running()
     except ImportError:
         # Fallback if import fails (shouldn't happen in normal operation)
@@ -436,10 +456,12 @@ def main():
         print("  • Run: hyprwhspr status")
         print("\n[INFO] To stop the running instance:")
         print("  • If running via systemd: systemctl --user stop hyprwhspr")
-        print("  • If running manually: kill the process or press Ctrl+C in its terminal")
+        print(
+            "  • If running manually: kill the process or press Ctrl+C in its terminal"
+        )
         print("\n[INFO] For more information, run: hyprwhspr --help")
         sys.exit(1)
-    
+
     # Fallback: also check via process detection
     is_running, how = _is_hyprwhspr_running()
     if is_running:
@@ -451,21 +473,24 @@ def main():
         print("  • Run: hyprwhspr status")
         print("\n[INFO] To stop the running instance:")
         print("  • If running via systemd: systemctl --user stop hyprwhspr")
-        print("  • If running manually: kill the process or press Ctrl+C in its terminal")
+        print(
+            "  • If running manually: kill the process or press Ctrl+C in its terminal"
+        )
         print("\n[INFO] For more information, run: hyprwhspr --help")
         sys.exit(1)
-    
+
     try:
         app = hyprwhsprApp()
         app.run()
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Stopping hyprwhspr...")
-        if 'app' in locals():
+        if "app" in locals():
             app._cleanup()
         _release_lock_file()
     except Exception as e:
         print(f"[ERROR] Error: {e}")
         import traceback
+
         traceback.print_exc()
         _release_lock_file()
         sys.exit(1)

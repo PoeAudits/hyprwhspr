@@ -87,6 +87,10 @@ class hyprwhsprApp:
         """Handle global shortcut trigger"""
         push_to_talk = self.config.get_setting("push_to_talk", False)
 
+        # Pause active media players if feature enabled
+        if self.media_controller.is_enabled():
+            self.media_controller.pause_active_players()
+
         if push_to_talk:
             # Push-to-talk mode: only start recording on key press
             if not self.is_recording:
@@ -106,6 +110,10 @@ class hyprwhsprApp:
             # Push-to-talk mode: stop recording on key release
             self._stop_recording()
 
+        # Resume previously-playing media players
+        if self.media_controller.is_enabled():
+            self.media_controller.resume_paused_players()
+
     def _start_recording(self):
         """Start voice recording"""
         if self.is_recording:
@@ -122,10 +130,6 @@ class hyprwhsprApp:
 
             # Start audio capture
             self.audio_capture.start_recording()
-
-            # Pause active media players if feature enabled
-            if self.media_controller.is_enabled():
-                self.media_controller.pause_active_players()
 
             # Start audio level monitoring thread
             self._start_audio_level_monitoring()
@@ -160,6 +164,10 @@ class hyprwhsprApp:
             else:
                 print("[WARN] No audio data captured")
 
+            # Resume previously-playing media players (handles both toggle and push-to-talk modes)
+            if self.media_controller.is_enabled():
+                self.media_controller.resume_paused_players()
+
         except Exception as e:
             print(f"[ERROR] Error stopping recording: {e}")
 
@@ -179,16 +187,8 @@ class hyprwhsprApp:
 
                 # Inject text
                 self._inject_text(self.current_transcription)
-
-                # Resume previously-playing media players
-                if self.media_controller.is_enabled():
-                    self.media_controller.resume_paused_players()
             else:
                 print("[WARN] No transcription generated")
-
-                # Resume media players even if no transcription (dictation was cancelled/empty)
-                if self.media_controller.is_enabled():
-                    self.media_controller.resume_paused_players()
 
         except Exception as e:
             print(f"[ERROR] Error processing audio: {e}")

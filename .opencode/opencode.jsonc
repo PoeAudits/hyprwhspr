@@ -1,0 +1,10 @@
+{
+  "instructions": [
+    "~/.config/opencode/CODING.md",
+    "~/.config/opencode/PYTHON_STYLEGUIDE.md"
+  ],
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "*": "allow",
+},
+}

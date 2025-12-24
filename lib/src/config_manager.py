@@ -37,7 +37,7 @@ class ConfigManager:
             "rest_body": {},  # Additional body fields for remote transcription
             "rest_timeout": 30,  # Request timeout in seconds
             "rest_audio_format": "wav",  # Audio format for remote transcription
-            "media_pause_on_dictation": False,  # Automatically pause media players during dictation
+            "media_pause_on_dictation": True,  # Automatically pause media players during dictation
         }
 
         # Set up config directory and file path

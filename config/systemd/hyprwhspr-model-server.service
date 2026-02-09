@@ -1,0 +1,14 @@
+[Unit]
+Description=hyprwhspr local GGUF model websocket server
+After=network.target
+
+[Service]
+Type=simple
+Environment=HYPRWHSPR_ROOT=%h/.local/lib/hyprwhspr
+ExecStart=%h/.local/bin/hyprwhspr backend server start
+ExecStop=%h/.local/bin/hyprwhspr backend server stop
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

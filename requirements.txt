@@ -26,3 +26,15 @@ PyGObject>=3.42.0
 
 # ElevenLabs integration
 elevenlabs>=2.34.0
+
+# Local GGUF websocket server
+fastapi>=0.116.0
+uvicorn>=0.35.0
+llama-cpp-python>=0.3.16
+
+# Local safetensors websocket server
+torch>=2.4.0
+transformers>=4.52.0
+safetensors>=0.5.3
+accelerate>=1.10.0
+huggingface_hub>=0.34.0

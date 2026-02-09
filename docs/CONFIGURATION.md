@@ -249,6 +249,92 @@ Two modes available:
 }
 ```
 
+#### Local realtime servers (vLLM / Voxtral / OpenAI-compatible)
+
+For local servers, configure `realtime-ws` with explicit URL and protocol behavior:
+
+```jsonc
+{
+    "transcription_backend": "realtime-ws",
+    "websocket_provider": "custom",
+    "websocket_url": "ws://127.0.0.1:8000/v1/realtime",
+    "websocket_model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+    "websocket_protocol": "vllm-realtime",   // "vllm-realtime" or "openai-realtime"
+    "websocket_auth_mode": "none",           // "none", "bearer", or "header"
+    "websocket_api_key_header": null,
+    "realtime_mode": "transcribe"
+}
+```
+
+You can also manage this with profiles:
+
+```bash
+hyprwhspr backend add-profile voxtral-local \
+  --url ws://127.0.0.1:8000/v1/realtime \
+  --model mistralai/Voxtral-Mini-4B-Realtime-2602 \
+  --protocol vllm-realtime \
+  --auth-mode none
+
+hyprwhspr backend use-profile voxtral-local
+```
+
+#### Built-in local GGUF websocket server
+
+hyprwhspr can manage a local websocket server process on demand.
+
+Preferred setup is safetensors-first (`--local-model`) with native safetensors runtime.
+
+Core config keys:
+
+```jsonc
+{
+    "local_model_server": {
+        "model_path": "/home/user/.cache/hyprwhspr/models/model.gguf",
+        "source_type": "safetensors",
+        "source_path": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+        "n_gpu_layers": -1,
+        "n_ctx": 8192,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "idle_timeout": 300,
+        "auto_start": true,
+        "max_restarts": 3
+    }
+}
+```
+
+Recommended setup flow:
+
+```bash
+# Download from HuggingFace into local cache
+hyprwhspr model download --repo <org/repo>
+
+# Configure from safetensors repo (downloads + runs directly)
+hyprwhspr setup --local-model --repo <org/repo>
+
+# Optional direct GGUF flow
+hyprwhspr setup --local-gguf --repo <org/repo> --file <model.gguf>
+
+# Or use an existing local file
+hyprwhspr setup --local-gguf --local-path /path/to/model.gguf
+```
+
+Useful commands:
+
+```bash
+hyprwhspr model list-local
+hyprwhspr model recommend
+hyprwhspr backend server status
+hyprwhspr backend server start
+hyprwhspr backend server stop
+```
+
+Notes:
+
+- Auto-start only applies to loopback websocket URLs (`localhost`/`127.0.0.1`).
+- If `auto_start` is true and the server is not running, hyprwhspr attempts to start it automatically.
+- If a remote request to HuggingFace fails (auth/gated), download with `huggingface-cli` and use `--local-path`.
+
 #### ElevenLabs Scribe v2
 
 Ultra-low latency (~150ms) streaming transcription with 90+ languages. 

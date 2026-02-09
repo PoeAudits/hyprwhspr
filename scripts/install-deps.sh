@@ -87,10 +87,12 @@ detect_distro() {
     elif [[ "${ID_LIKE:-}" == *"suse"* ]]; then
         DISTRO="opensuse-like"
         PKG_MANAGER="zypper"
+    elif [[ "$ID" == "arch" ]]; then
+        DISTRO="arch"
+        PKG_MANAGER="pacman"
     else
         log_error "Unsupported distribution: $ID"
-        log_info "Supported: Ubuntu, Debian, Fedora, openSUSE (and derivatives)"
-        log_info "For Arch Linux, use: yay -S hyprwhspr"
+        log_info "Supported: Ubuntu, Debian, Fedora, openSUSE, Arch (and derivatives)"
         exit 1
     fi
 
@@ -433,6 +435,36 @@ install_deps_zypper() {
     log_success "System dependencies installed"
 }
 
+# Install dependencies for Arch Linux
+install_deps_pacman() {
+    log_info "Installing system dependencies via pacman..."
+
+    sudo pacman -S --needed --noconfirm \
+        python \
+        python-pip \
+        git \
+        cmake \
+        make \
+        gcc \
+        python-numpy \
+        python-scipy \
+        python-evdev \
+        python-requests \
+        python-psutil \
+        python-rich \
+        python-pyudev \
+        python-dbus \
+        python-gobject \
+        gtk4 \
+        gtk4-layer-shell \
+        pipewire \
+        pipewire-pulse \
+        ydotool \
+        wl-clipboard
+
+    log_success "System dependencies installed"
+}
+
 # Install Python packages that aren't in distro repos
 install_pip_packages() {
     log_info "Checking Python packages..."
@@ -596,6 +628,9 @@ main() {
             ;;
         zypper)
             install_deps_zypper
+            ;;
+        pacman)
+            install_deps_pacman
             ;;
     esac
 
